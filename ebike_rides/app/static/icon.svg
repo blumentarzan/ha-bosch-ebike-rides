@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f7ed8"/>
+      <stop offset="1" stop-color="#0b7285"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+  <!-- wheels -->
+  <g fill="none" stroke="#fff" stroke-width="6">
+    <circle cx="34" cy="84" r="20"/>
+    <circle cx="96" cy="84" r="20"/>
+  </g>
+  <g fill="#fff"><circle cx="34" cy="84" r="3.5"/><circle cx="96" cy="84" r="3.5"/></g>
+  <!-- frame -->
+  <g fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M34 84 L60 84 L50 52 Z"/>
+    <path d="M50 52 L84 54"/>
+    <path d="M84 54 L96 84"/>
+    <path d="M84 54 L80 40 L91 38"/>
+    <path d="M42 48 L57 48"/>
+  </g>
+  <!-- battery on the down tube -->
+  <g transform="translate(72 69) rotate(-52)">
+    <rect x="-17" y="-7.5" width="34" height="15" rx="5" fill="#ffd43b" stroke="#fff" stroke-width="3"/>
+  </g>
+  <!-- bolt badge -->
+  <circle cx="30" cy="30" r="15" fill="#ffd43b"/>
+  <path d="M33 18 L22 33 L29 33 L26 43 L38 27 L31 27 Z" fill="#0b4f6c"/>
+</svg>

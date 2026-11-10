@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.5
+
+- New add-on icon and logo (e-bike with battery and charge bolt), also used as the browser tab icon of the panel.
+
 ## 0.3.4
 
 - Bikes: read the odometer from the real Flow app bike profile (`driveUnit.totalDistanceTraveled`); it was always empty, which weakened attributing rides to bikes by odometer.
