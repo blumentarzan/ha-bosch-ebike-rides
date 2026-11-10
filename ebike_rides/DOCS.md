@@ -4,7 +4,11 @@ Fetches all rides from the Bosch eBike Flow cloud – for any number of Bosch ac
 
 - **Heatmap**: routes ridden more often glow stronger. Counted per *ride*, not per GPS point – waiting at a red light does not create a hotspot.
 - **Lines view**: all rides overlaid, one colour per person, click to open a ride.
+- **New roads**: the map's *New* view shows in orange what was ridden for the first time in the selected period, with the km of new and of all distinct roads (≈ 25 m grid).
 - **Statistics & comparison**: km, rides, hours, elevation per day / week / month / year / weekday / time of day, optionally cumulative; the day view pages through one week at a time and can jump to any date. Leaderboard with longest ride, riding days, week streak.
+- **Records & streaks** per person: longest ride, most climbing, fastest average (rides from 5 km), top speed, longest moving time, best day / week / month, longest and current day and week streaks.
+- **Year tab**: cumulative curves of every year on one chart and how this year compares with the same day last year; a year in review per person (monthly km, best month, longest ride, streaks, newly explored km).
+- **Ride details**: map, elevation and speed profile (hovering the profile marks the spot on the map and the other way round), power, cadence, calories, GPX.
 - **Filters**: period, people, bike.
 - **Export**: every ride as GPX, or all (filtered) rides as a ZIP.
 - **Home Assistant**: sensors per person and an event per new ride.
@@ -21,10 +25,10 @@ Data is stored in `/data/rides.db` inside the add-on and is part of every Home A
 
 Uses the same login as the eBike Flow app. At the end Bosch redirects to `onebikeapp-ios://…`, which a browser cannot open. So, on a **computer**:
 
-1. Open the developer tools (F12) → **Network** tab.
+1. Open the developer tools (F12) **before** logging in → **Console** tab.
 2. In the dialog click *Open Bosch login* and sign in with the SingleKey ID.
-3. Find the `oauth2redirect` entry in the network list → right-click → *Copy URL*.
-4. Paste it into the dialog → *Connect*.
+3. Chrome and Edge then show a red line `Failed to launch 'onebikeapp-ios://…'` in the console – copy the whole line. In other browsers use the **Network** tab: entry `oauth2redirect` → right-click → *Copy URL*.
+4. Paste it into the dialog – it confirms when it found the login code – → *Connect*.
 
 The code is only valid for a few minutes. After that the add-on renews access by itself; you only need to log in again when the account shows “login required”.
 
@@ -45,6 +49,9 @@ Rides are attributed via Bosch's bike ID, otherwise via the odometer, and automa
 With `publish_sensors: true`, per person:
 
 - `sensor.ebike_<name>_km_this_year` (attributes: rides, km month/week/total)
+- `sensor.ebike_<name>_km_this_month`, `…_km_this_week`, `…_rides_this_year`
+- `sensor.ebike_<name>_days_since_last_ride`
+- `sensor.ebike_<name>_<bike>_battery` – only while Bosch reports a charge level for the bike (often it does not)
 - `sensor.ebike_<name>_last_ride`
 - Event `ebike_rides_new_activity` (`rider`, `distance_km`, `title`, …) – not during the initial import.
 

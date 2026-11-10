@@ -60,40 +60,56 @@ class HABridge:
         except Exception as err:  # noqa: BLE001 - HA being down must not break syncing
             _LOGGER.debug("HA bridge: %s", err)
 
-    async def publish_rider(self, name: str, totals: dict, last: dict | None) -> None:
+    async def _sensor(self, entity: str, state, unit: str | None, name: str, icon: str,
+                      device_class: str | None = None, state_class: str | None = None,
+                      **attrs) -> None:
+        attributes = {"friendly_name": name, "icon": icon, **attrs}
+        if unit:
+            attributes["unit_of_measurement"] = unit
+        if device_class:
+            attributes["device_class"] = device_class
+        if state_class:
+            attributes["state_class"] = state_class
+        await self._post(f"/states/{entity}", {"state": state, "attributes": attributes})
+
+    async def publish_rider(self, name: str, totals: dict, last: dict | None,
+                            bikes: list[dict] | None = None) -> None:
         base = f"sensor.ebike_{slug(name)}"
-        await self._post(
-            f"/states/{base}_km_this_year",
-            {
-                "state": round(totals.get("year_km", 0), 1),
-                "attributes": {
-                    "unit_of_measurement": "km",
-                    "device_class": "distance",
-                    "state_class": "total_increasing",
-                    "icon": "mdi:bike",
-                    "friendly_name": f"{name} eBike km this year",
-                    "rides_this_year": totals.get("year_rides", 0),
-                    "km_this_month": round(totals.get("month_km", 0), 1),
-                    "km_this_week": round(totals.get("week_km", 0), 1),
-                    "km_total": round(totals.get("total_km", 0), 1),
-                },
-            },
+        km = lambda k: round(totals.get(k, 0), 1)  # noqa: E731
+        await self._sensor(
+            f"{base}_km_this_year", km("year_km"), "km", f"{name} eBike km this year", "mdi:bike",
+            "distance", "total_increasing",
+            rides_this_year=totals.get("year_rides", 0), km_this_month=km("month_km"),
+            km_this_week=km("week_km"), km_total=km("total_km"),
         )
+        await self._sensor(f"{base}_km_this_month", km("month_km"), "km",
+                           f"{name} eBike km this month", "mdi:calendar-month",
+                           "distance", "total_increasing")
+        await self._sensor(f"{base}_km_this_week", km("week_km"), "km",
+                           f"{name} eBike km this week", "mdi:calendar-week",
+                           "distance", "total_increasing")
+        await self._sensor(f"{base}_rides_this_year", totals.get("year_rides", 0), "rides",
+                           f"{name} eBike rides this year", "mdi:counter",
+                           None, "total_increasing")
+        if totals.get("days_since_last") is not None:
+            await self._sensor(f"{base}_days_since_last_ride", totals["days_since_last"], "d",
+                               f"{name} eBike days since last ride", "mdi:calendar-clock",
+                               "duration", "measurement")
+        for bike in bikes or []:
+            if bike.get("battery_pct") is None:
+                continue
+            await self._sensor(
+                f"{base}_{slug(bike.get('name') or bike['id'][:8])}_battery",
+                round(bike["battery_pct"]), "%", f"{name} {bike.get('name') or 'eBike'} battery",
+                "mdi:battery", "battery", "measurement",
+            )
         if last:
-            await self._post(
-                f"/states/{base}_last_ride",
-                {
-                    "state": round((last.get("distance_m") or 0) / 1000, 1),
-                    "attributes": {
-                        "unit_of_measurement": "km",
-                        "icon": "mdi:map-marker-path",
-                        "friendly_name": f"{name} eBike last ride",
-                        "start": last.get("start_iso"),
-                        "title": last.get("title"),
-                        "duration_min": round((last.get("duration_s") or 0) / 60),
-                        "elevation_gain_m": last.get("elevation_gain_m"),
-                    },
-                },
+            await self._sensor(
+                f"{base}_last_ride", round((last.get("distance_m") or 0) / 1000, 1), "km",
+                f"{name} eBike last ride", "mdi:map-marker-path",
+                start=last.get("start_iso"), title=last.get("title"),
+                duration_min=round((last.get("duration_s") or 0) / 60),
+                elevation_gain_m=last.get("elevation_gain_m"),
             )
 
     async def new_ride(self, rider: str, ride: dict) -> None:
