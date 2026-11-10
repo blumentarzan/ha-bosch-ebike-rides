@@ -1,20 +1,16 @@
 name: eBike Rides
-version: "0.2.0"
+version: "0.3.1"
 slug: ebike_rides
-description: Bosch eBike Flow – alle Fahrten mehrerer Konten, Heatmap und Statistik
+description: Bosch eBike Flow – all rides of several accounts, heatmap and statistics
 url: https://github.com/blumentarzan/ha-bosch-ebike-rides
 arch:
   - amd64
   - aarch64
 init: false
-startup: application
-boot: auto
 ingress: true
-ingress_port: 8099
 panel_icon: mdi:bike
 panel_title: eBike Rides
 homeassistant_api: true
-backup: hot
 options:
   sync_interval_minutes: 30
   detail_delay_seconds: 0.5
