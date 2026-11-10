@@ -9,5 +9,5 @@ COPY app /opt/app
 COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
-LABEL io.hass.type="addon" io.hass.version="0.3.1"
+LABEL io.hass.type="addon" io.hass.version="0.3.2"
 CMD ["/run.sh"]
