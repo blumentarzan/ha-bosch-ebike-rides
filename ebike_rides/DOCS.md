@@ -63,7 +63,7 @@ The sensors are set after every sync, and again at the next sync after an HA res
 
 If a ride shows 0 km, no elevation, a wrong time or sits on the wrong bike, the Bosch API probably answers with field names or units this add-on does not know yet.
 
-1. Set `log_level` to `debug` and restart the add-on.
+1. Set `log_level` to `debug`, **save**, and restart the add-on. The first log line must read `... listening on :8099 (log level DEBUG)`; if it says `INFO`, the option was not saved.
 2. Start a sync (Accounts tab).
 3. Open the add-on **Log**. For each account it shows one raw answer per endpoint (`bikes raw`, `activities raw`, `track raw`) and what was parsed from it (`first ride parsed`, `track parsed`).
 4. Open an issue on GitHub with those lines and what looks wrong.

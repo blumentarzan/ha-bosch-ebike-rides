@@ -198,7 +198,11 @@ def normalize_bike(raw: dict) -> dict | None:
     return {
         "id": bike_id,
         "name": name or "eBike",
-        "odometer_m": _first(_num(du.get("odometer")), _num(a.get("odometer"))),
+        # Mobile API (seen 2026-11): driveUnit.totalDistanceTraveled in metres.
+        "odometer_m": _first(
+            _num(du.get("totalDistanceTraveled")), _num(du.get("odometer")),
+            _num(a.get("totalDistanceTraveled")), _num(a.get("odometer")),
+        ),
     }
 
 

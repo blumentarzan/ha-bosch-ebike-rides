@@ -34,3 +34,5 @@ jobs:
           curl -fs localhost:8099/api/state > /dev/null
           curl -fs localhost:8099/ | grep -q "eBike Rides"
           curl -fs localhost:8099/static/i18n.js > /dev/null
+          # config.yaml is in the image, so the startup line names the version
+          docker logs smoke 2>&1 | grep -Eq "eBike Rides [0-9]+\.[0-9]+\.[0-9]+ listening"

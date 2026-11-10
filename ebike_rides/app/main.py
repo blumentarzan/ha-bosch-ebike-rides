@@ -30,6 +30,16 @@ PUBLIC_ACCOUNT_FIELDS = (
 )
 
 
+def _version() -> str:
+    """Add-on version from config.yaml (copied into the image next to the app)."""
+    try:
+        text = (Path(__file__).resolve().parent.parent / "config.yaml").read_text()
+    except OSError:
+        return "unknown"
+    m = re.search(r'^version:\s*"?([^"\s]+)', text, re.M)
+    return m.group(1) if m else "unknown"
+
+
 def _options() -> dict:
     path = Path(os.environ.get("OPTIONS_PATH", "/data/options.json"))
     try:
@@ -298,7 +308,10 @@ async def amain() -> None:
     await runner.setup()
     port = int(os.environ.get("PORT", "8099"))
     await web.TCPSite(runner, "0.0.0.0", port).start()
-    _LOGGER.info("eBike Rides listening on :%d", port)
+    _LOGGER.info(
+        "eBike Rides %s listening on :%d (log level %s)",
+        _version(), port, logging.getLevelName(logging.getLogger().getEffectiveLevel()),
+    )
     sync.start()
     try:
         await asyncio.Event().wait()

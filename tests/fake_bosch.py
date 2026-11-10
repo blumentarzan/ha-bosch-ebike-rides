@@ -135,8 +135,16 @@ def make_app(n1: int = 160, n2: int = 70) -> web.Application:
         )
 
     async def m_bikes(req):
+        # Shape of the real mobile bike profile (seen 2026-11): a list of
+        # ECBSBikeProfileDto, odometer in driveUnit.totalDistanceTraveled (m).
         bikes, _, _ = _acct(req)
-        return web.json_response({"data": {"attributes": {"bikes": bikes}}})
+        return web.json_response({"data": [
+            {"id": b["id"], "type": "ECBSBikeProfileDto", "attributes": {
+                "id": b["id"], "brandName": "Generic Bikes", "batteries": [],
+                "driveUnit": {"productName": "Performance Line",
+                              "totalDistanceTraveled": float(b["attributes"]["driveUnit"]["odometer"])},
+            }} for b in bikes
+        ]})
 
     async def m_acts(req):
         _, rides, _ = _acct(req)
