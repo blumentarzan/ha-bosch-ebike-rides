@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Add-on config: removed options that only repeated Home Assistant's defaults (add-on linter); English store description.
+
 ## 0.3.0
 
 - Accounts: change a person's colour at any time (click the colour dot).
