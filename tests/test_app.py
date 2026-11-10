@@ -188,6 +188,20 @@ async def test_expired_refresh_needs_login(env):
     assert acc["status"] == "login_required"
 
 
+async def test_change_account_colour(env):
+    _, _, client, _ = env
+    r = await client.post("/api/accounts", json={"name": "X", "source": "mobile", "color": "#123456"})
+    created = await r.json()
+    aid = created["id"]
+    r = await client.patch(f"/api/accounts/{aid}", json={"color": "#ff8800"})
+    assert r.status == 200 and (await r.json())["color"] == "#ff8800"
+    acc = (await (await client.get("/api/state")).json())["accounts"][0]
+    # a colour change must not touch the login
+    assert acc["color"] == "#ff8800" and acc["status"] == created["status"]
+    r = await client.patch(f"/api/accounts/{aid}", json={"color": "red; x"})
+    assert r.status == 400
+
+
 async def test_wrong_state_rejected(env):
     _, _, client, _ = env
     r = await client.post("/api/accounts", json={"name": "X", "source": "mobile"})

@@ -64,6 +64,13 @@ tr.click { cursor: pointer; } tr.click:hover { background: var(--bg); }
 .acc { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
 .acc .who { display: flex; gap: 10px; align-items: center; }
 .acc .dot { width: 14px; height: 14px; border-radius: 50%; }
+.acc input.swatch { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 50%;
+  overflow: hidden; cursor: pointer; background: none; }
+.acc input.swatch::-webkit-color-swatch-wrapper { padding: 0; }
+.acc input.swatch::-webkit-color-swatch { border: none; border-radius: 50%; }
+.acc input.swatch::-moz-color-swatch { border: none; border-radius: 50%; }
+.intensity { display: inline-flex; gap: 6px; align-items: center; }
+.intensity input { width: 110px; }
 .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
 .badge.ok { color: var(--ok); } .badge.login_required { color: var(--warn); } .badge.error { color: var(--err); }
 .bikes { margin: 8px 0 0 24px; color: var(--muted); font-size: 13px; }

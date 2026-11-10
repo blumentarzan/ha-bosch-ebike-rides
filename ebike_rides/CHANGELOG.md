@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1
+
+- Add-on config: removed options that only repeated Home Assistant's defaults (add-on linter); English store description.
+
+## 0.3.0
+
+- Accounts: change a person's colour at any time (click the colour dot).
+- Map: intensity slider for heatmap and lines, so rarely ridden routes stay visible; remembered per browser.
+- Filters: new period "Last 7 days".
+- Map: fit to the rides reliably even when the page is still being laid out on load.
+
 ## 0.2.0
 
 - UI in English and German, following the Home Assistant user's language (English for all other languages). Add-on documentation now in English.

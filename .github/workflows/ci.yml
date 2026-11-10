@@ -27,7 +27,10 @@ jobs:
         run: docker build -t ebike-rides ./ebike_rides
       - name: Smoke test
         run: |
-          docker run -d --name t -p 8099:8099 -e DB_PATH=/tmp/r.db -e OPTIONS_PATH=/nonexistent ebike-rides
+          # Docker needs container names of at least two characters.
+          docker run -d --name smoke -p 8099:8099 -e DB_PATH=/tmp/r.db -e OPTIONS_PATH=/nonexistent ebike-rides
+          trap 'docker logs smoke' EXIT
           for i in $(seq 1 20); do curl -fs localhost:8099/api/state && break; sleep 1; done
+          curl -fs localhost:8099/api/state > /dev/null
           curl -fs localhost:8099/ | grep -q "eBike Rides"
-          docker logs t
+          curl -fs localhost:8099/static/i18n.js > /dev/null
