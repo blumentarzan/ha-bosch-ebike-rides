@@ -23,6 +23,7 @@
 
 <section id="filters">
   <select id="f-range">
+    <option value="7d" data-i18n="range.7d"></option>
     <option value="year" data-i18n="range.year"></option>
     <option value="lastyear" data-i18n="range.lastyear"></option>
     <option value="12m" data-i18n="range.12m"></option>
@@ -44,6 +45,8 @@
         <button data-mode="heat" class="active" data-i18n="map.heat"></button>
         <button data-mode="lines" data-i18n="map.lines"></button>
       </div>
+      <label class="intensity muted small"><span data-i18n="map.intensity"></span>
+        <input type="range" id="map-intensity" min="1" max="10" step="1" value="5"></label>
       <span id="map-info" class="muted"></span>
       <span id="legend" class="legend" hidden></span>
     </div>

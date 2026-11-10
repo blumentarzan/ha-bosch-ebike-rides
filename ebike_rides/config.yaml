@@ -1,5 +1,5 @@
 name: eBike Rides
-version: "0.2.0"
+version: "0.3.0"
 slug: ebike_rides
 description: Bosch eBike Flow – alle Fahrten mehrerer Konten, Heatmap und Statistik
 url: https://github.com/blumentarzan/ha-bosch-ebike-rides

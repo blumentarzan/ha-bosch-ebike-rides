@@ -47,6 +47,7 @@ function query(range = true) {
   const now = new Date();
   const r = range ? $("#f-range").value : "all";
   let from = null, to = null;
+  if (r === "7d") from = addDays(today(), -6);  // today plus the 6 days before
   if (r === "year") from = `${now.getFullYear()}-01-01`;
   if (r === "lastyear") { from = `${now.getFullYear() - 1}-01-01`; to = `${now.getFullYear() - 1}-12-31`; }
   if (r === "month") from = iso(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -89,7 +90,11 @@ function heatColor(t) {
   }
   return "rgb(224,49,49)";
 }
-const heatT = (c, max) => (max <= 1 ? 1 : Math.log(c) / Math.log(max));
+// Intensity slider 1..10 (5 = default) -> k 0.2..2. Higher k lifts rarely
+// ridden cells up the colour scale (gamma), draws dots/lines bigger and more opaque.
+const intensityK = () => (+$("#map-intensity").value || 5) / 5;
+const heatT = (c, max) => (max <= 1 ? 1 : (Math.log(c) / Math.log(max)) ** (1 / intensityK()));
+const lineStyle = () => { const k = intensityK(); return { weight: 1.5 + 1.5 * k, opacity: Math.min(1, 0.12 + 0.3 * k) }; };
 
 // Draws every grid cell in the colour of its own ride count (no summing of
 // neighbours), so a corridor ridden 200 times stands out against one ridden twice.
@@ -113,9 +118,10 @@ const CellHeat = L.Layer.extend({
     ctx.scale(dpr, dpr);
     const z = map.getZoom();
     const lat = map.getCenter().lat;
-    const px = Math.max(2.2, Math.min(9, 25 / (156543 * Math.cos(lat * Math.PI / 180) / 2 ** z) * 1.6));
+    const k = intensityK();
+    const px = Math.max(2.2, Math.min(9, 25 / (156543 * Math.cos(lat * Math.PI / 180) / 2 ** z) * 1.6)) * (0.7 + 0.3 * k);
     const b = map.getBounds().pad(0.05);
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = Math.min(1, 0.6 + 0.3 * k);
     let last = null;
     for (const [la, lo, n] of this.cells) {
       if (la < b.getSouth() || la > b.getNorth() || lo < b.getWest() || lo > b.getEast()) continue;
@@ -131,7 +137,8 @@ function renderLegend(max) {
   const el = $("#legend");
   if (!max) { el.hidden = true; return; }
   el.hidden = false;
-  const marks = [1, Math.round(Math.sqrt(max)), max].filter((v, i, a) => a.indexOf(v) === i);
+  // middle mark = count that lands in the middle of the bar at the current intensity
+  const marks = [1, Math.round(max ** (0.5 ** intensityK())), max].filter((v, i, a) => a.indexOf(v) === i);
   el.innerHTML = `<span class="bar" style="background:linear-gradient(90deg,${HEAT_STOPS.map(([p, c]) => `rgb(${c}) ${p * 100}%`).join(",")})"></span>` +
     `<span class="marks">${marks.map((m) => `<span>${m}×</span>`).join("")}</span>`;
 }
@@ -139,6 +146,7 @@ function renderLegend(max) {
 function initMap() {
   S.map = L.map("map", { preferCanvas: true }).setView(...DEFAULT_VIEW);
   L.tileLayer(TILE_URL, TILE_OPTS).addTo(S.map);
+  initMapResizeFit();
 }
 
 async function loadMap() {
@@ -149,6 +157,7 @@ async function loadMap() {
   let bounds = null;
   if (S.mapMode === "heat") {
     const d = await api(`api/heat?${q}`);
+    S.heatMax = d.max;
     S.layer = new CellHeat(d.cells, d.max).addTo(S.map);
     $("#map-info").textContent = t("map.heat_info", { n: fmt(d.rides), max: fmt(d.max) });
     renderLegend(d.max);
@@ -157,7 +166,7 @@ async function loadMap() {
     const d = await api(`api/lines?${q}`);
     const group = L.featureGroup();
     for (const l of d.lines) {
-      L.polyline(l.p, { color: l.c, weight: 3, opacity: 0.35, interactive: true })
+      L.polyline(l.p, { color: l.c, ...lineStyle(), interactive: true })
         .on("click", () => openRide(l.a, l.id)).addTo(group);
     }
     S.layer = group.addTo(S.map);
@@ -165,12 +174,29 @@ async function loadMap() {
     $("#map-info").textContent = t("map.lines_info", { n: fmt(d.lines.length) });
     if (d.lines.length) bounds = group.getBounds();
   }
-  if (bounds && bounds.isValid() && !S.fitted) {
-    // The container may only just have become visible; with a stale size of 0
-    // fitBounds would zoom to the maximum.
-    S.map.invalidateSize();
-    S.map.fitBounds(bounds, { padding: [20, 20] }); S.fitted = true;
+  if (bounds && bounds.isValid() && !S.fitted) fitWhenSized(bounds);
+}
+
+// fitBounds on a container without a real size (tab just shown, iframe or
+// window still being laid out) zooms to the maximum. So fit only once the map
+// is big enough; otherwise remember the bounds and fit on the next resize.
+function fitWhenSized(bounds) {
+  S.map.invalidateSize();
+  const size = S.map.getSize();
+  if (size.x > 100 && size.y > 100) {
+    S.map.fitBounds(bounds, { padding: [20, 20] });
+    S.fitted = true;
+    S.pendingFit = null;
+    return;
   }
+  S.pendingFit = bounds;
+}
+
+function initMapResizeFit() {
+  const retry = () => { if (S.pendingFit && !S.fitted) fitWhenSized(S.pendingFit); };
+  S.map.on("resize", retry);
+  window.addEventListener("resize", retry);
+  if (window.ResizeObserver) new ResizeObserver(retry).observe($("#map"));
 }
 
 /* ------------------------------------------------------------ stats */
@@ -352,7 +378,7 @@ function renderAccounts() {
     const p = st.progress[a.id];
     const bikes = st.bikes.filter((b) => b.account_id === a.id);
     return `<div class="card"><div class="acc">
-      <div class="who"><span class="dot" style="background:${esc(a.color)}"></span><b>${esc(a.name)}</b>
+      <div class="who"><input type="color" class="swatch" data-color="${a.id}" value="${esc(a.color)}" title="${esc(t("acc.color_change"))}"><b>${esc(a.name)}</b>
         <span class="badge ${a.status}">${esc(t("status." + a.status))}</span>
         <span class="muted small">${t(a.source === "dataact" ? "acc.src_short_dataact" : "acc.src_short_mobile")}</span></div>
       <div class="row">
@@ -368,6 +394,14 @@ function renderAccounts() {
     </div>`;
   }).join("") : `<div class="card empty">${esc(t("acc.empty"))}</div>`;
   $$("#acc-list [data-act]").forEach((b) => b.onclick = () => accountAction(b.dataset.act, +b.dataset.id));
+  // "change" fires once the picker is closed, so dragging through colours does not spam the API.
+  $$("#acc-list input[data-color]").forEach((inp) => inp.onchange = async () => {
+    try {
+      await api(`api/accounts/${inp.dataset.color}`, { method: "PATCH", body: { color: inp.value } });
+      await loadState();
+      S.fitted = true;  // keep the current map view
+    } catch (e) { alert(e.message); }
+  });
   $("#bridge-info").textContent = st.ha_bridge ? t("acc.bridge") : "";
 }
 
@@ -441,6 +475,14 @@ $$("nav button").forEach((b) => b.onclick = () => {
   syncStatsControls();
   refresh();
 });
+// Restyle in place while dragging; no refetch needed.
+$("#map-intensity").value = localStorageGet("intensity") || 5;
+$("#map-intensity").oninput = (e) => {
+  localStorageSet("intensity", e.target.value);
+  if (!S.layer) return;
+  if (S.mapMode === "heat") { S.layer._draw(); renderLegend(S.heatMax); }
+  else S.layer.setStyle(lineStyle());
+};
 $$("#map-mode button").forEach((b) => b.onclick = () => {
   $$("#map-mode button").forEach((x) => x.classList.toggle("active", x === b));
   S.mapMode = b.dataset.mode; loadMap();
