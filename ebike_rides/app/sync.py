@@ -33,6 +33,8 @@ class SyncManager:
         self.interval = max(5, interval_min) * 60
         self.detail_delay = detail_delay_s
         self._locks: dict[int, asyncio.Lock] = {}
+        self._track_sampled: set[int] = set()
+        self._bike_ids_noted: set[str] = set()
         self.progress: dict[int, dict] = {}
         self._task: asyncio.Task | None = None
         self._wake = asyncio.Event()
@@ -126,6 +128,7 @@ class SyncManager:
                 self.db.upsert_activities(account_id, rides)
                 all_bikes = self.db.bikes(account_id)
                 self.db.set_bike_ids(account_id, attribution.attribute(all_bikes, rides))
+                self._log_bike_ids(acc["name"], bikes, rides)
 
                 todo = self.db.pending_tracks(account_id)
                 prog.update(phase="tracks", total=len(todo))
@@ -141,6 +144,18 @@ class SyncManager:
                     await asyncio.to_thread(self._store_track, account_id, act_id, points)
                     prog["done"] = i
                     await asyncio.sleep(self.detail_delay)
+
+                if not todo:
+                    await self._sample_track(account_id, client)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    counts = self.db.q(
+                        "SELECT track_status s, COUNT(*) n FROM activities WHERE account_id=? "
+                        "GROUP BY track_status", (account_id,),
+                    )
+                    _LOGGER.debug(
+                        "%s: tracks stored: %s", acc["name"],
+                        ", ".join(f"{c['n']} {c['s']}" for c in counts) or "none",
+                    )
 
                 self.db.update_account(
                     account_id, status="ok", last_error=None, last_sync=time.time()
@@ -162,6 +177,47 @@ class SyncManager:
                 self.db.update_account(account_id, status="error", last_error=str(err)[:300])
             finally:
                 self.progress.pop(account_id, None)
+
+    def _log_bike_ids(self, name: str, bikes: list[dict], rides: list[dict]) -> None:
+        known = {b["id"] for b in bikes}
+        by_id = attribution.ride_bike_ids(rides)
+        foreign = {k: v for k, v in by_id.items() if k not in known and k != "none"}
+        if not foreign:
+            return
+        n = sum(e["rides"] for e in foreign.values())
+        level = logging.DEBUG if name in self._bike_ids_noted else logging.INFO
+        self._bike_ids_noted.add(name)
+        _LOGGER.log(
+            level,
+            "%s: %d of %d rides name a bike id that is not in the bike profile; "
+            "they are attributed by odometer (or to the only bike)", name, n, len(rides),
+        )
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            day = lambda ts: time.strftime("%Y-%m-%d", time.gmtime(ts))  # noqa: E731
+            _LOGGER.debug(
+                "%s: profile bike ids %s; bike ids on rides: %s", name,
+                [b["id"][:8] for b in bikes],
+                "; ".join(
+                    f"{bid[:8]}{'' if bid in known else ' (not in profile)'}: "
+                    f"{e['rides']} rides {day(e['first'])}..{day(e['last'])}"
+                    for bid, e in by_id.items()
+                ),
+            )
+
+    async def _sample_track(self, account_id: int, client) -> None:
+        """At debug level, fetch one stored ride's track once, only to log its shape."""
+        if not _LOGGER.isEnabledFor(logging.DEBUG) or account_id in self._track_sampled:
+            return
+        self._track_sampled.add(account_id)
+        rows = self.db.q(
+            "SELECT id FROM activities WHERE account_id=? ORDER BY start_ts DESC LIMIT 1",
+            (account_id,),
+        )
+        if rows:
+            try:
+                await client.track(rows[0]["id"])  # logs "track raw" / "track parsed"
+            except ApiError as err:
+                _LOGGER.debug("track sample: %s", err)
 
     def _store_track(self, account_id: int, act_id: str, points: list) -> None:
         latlon = [(p[0], p[1]) for p in points]

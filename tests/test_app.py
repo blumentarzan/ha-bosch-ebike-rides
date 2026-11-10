@@ -15,7 +15,9 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from app import attribution, geo, stats  # noqa: E402
 from app.bosch import auth  # noqa: E402
-from app.bosch.client import check_activities, normalize_activity, normalize_track, redact  # noqa: E402
+from app.bosch.client import (  # noqa: E402
+    check_activities, normalize_activity, normalize_bike, normalize_track, redact,
+)
 from app.db import DB  # noqa: E402
 from app.ha import HABridge  # noqa: E402
 from app.main import _version, build_app  # noqa: E402
@@ -101,6 +103,25 @@ def test_check_activities_flags_wrong_mapping():
 def test_version_from_config_yaml():
     config = (ROOT / "ebike_rides" / "config.yaml").read_text()
     assert f'version: "{_version()}"' in config
+
+
+def test_normalize_bike_mobile_profile_shape():
+    raw = {"id": "b1", "type": "ECBSBikeProfileDto", "attributes": {
+        "id": "b1", "brandName": "Generic Bikes",
+        "driveUnit": {"productName": "Performance Line", "totalDistanceTraveled": 1234567.0},
+    }}
+    bike = normalize_bike(raw)
+    assert bike == {"id": "b1", "name": "Generic Bikes", "odometer_m": 1234567.0}
+
+
+def test_ride_bike_ids():
+    rides = [{"bike_id": "old", "start_ts": 10}, {"bike_id": "old", "start_ts": 30},
+             {"bike_id": "new", "start_ts": 50}, {"bike_id": None, "start_ts": 60}]
+    assert attribution.ride_bike_ids(rides) == {
+        "old": {"rides": 2, "first": 10, "last": 30},
+        "new": {"rides": 1, "first": 50, "last": 50},
+        "none": {"rides": 1, "first": 60, "last": 60},
+    }
 
 
 def test_attribution_by_odometer():
@@ -288,3 +309,35 @@ async def test_unparseable_track_warns_once(env, caplog):
         fake_bosch.BROKEN_TRACKS = False
     warnings = [r.getMessage() for r in caplog.records if "no GPS points" in r.getMessage()]
     assert len(warnings) == 1 and "keys:" in warnings[0]
+
+
+async def test_second_sync_samples_track_and_counts(env, caplog):
+    db, mgr, client, fake = env
+    a1 = await _login(client, mgr, "Alex", "mobile", "code-1")
+    caplog.clear()
+    caplog.set_level(logging.DEBUG)
+    await mgr.sync_account(a1)  # nothing pending any more
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "0 tracks fetched" in text
+    assert "MobileClient track raw:" in text  # sampled although nothing was pending
+    assert "Alex: tracks stored: 160 ok" in text
+    caplog.clear()
+    await mgr.sync_account(a1)
+    assert "track raw:" not in "\n".join(r.getMessage() for r in caplog.records)  # once per start
+
+
+async def test_rides_with_unknown_bike_id_are_reported(env, caplog):
+    db, mgr, client, fake = env
+    caplog.set_level(logging.DEBUG, logger="app.sync")
+    bikes = [{"id": "profile-bike"}]
+    rides = [{"bike_id": "ride-bike", "start_ts": 1_700_000_000},
+             {"bike_id": "profile-bike", "start_ts": 1_710_000_000}]
+    mgr._log_bike_ids("Sam", bikes, rides)
+    mgr._log_bike_ids("Sam", bikes, rides)
+    msgs = [(r.levelno, r.getMessage()) for r in caplog.records]
+    infos = [m for lvl, m in msgs if lvl == logging.INFO]
+    assert infos == ["Sam: 1 of 2 rides name a bike id that is not in the bike profile; "
+                     "they are attributed by odometer (or to the only bike)"]
+    detail = [m for lvl, m in msgs if "bike ids on rides" in m][0]
+    assert "ride-bik (not in profile): 1 rides 2023-11-14..2023-11-14" in detail
+    assert "profile-: 1 rides" in detail

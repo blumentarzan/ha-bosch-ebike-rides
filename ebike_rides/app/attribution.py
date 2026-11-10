@@ -14,6 +14,23 @@ from __future__ import annotations
 TOLERANCE_M = 1500.0
 
 
+def ride_bike_ids(rides: list[dict]) -> dict[str, dict]:
+    """Bike ids as named by the rides: ``{bike_id: {"rides", "first", "last"}}``.
+
+    Compared with the bike profile this shows whether rides carry another id
+    than the profile (all rides foreign) or belong to a bike that is gone
+    (only older rides foreign).
+    """
+    out: dict[str, dict] = {}
+    for r in rides:
+        bid = r.get("bike_id") or "none"
+        e = out.setdefault(bid, {"rides": 0, "first": r["start_ts"], "last": r["start_ts"]})
+        e["rides"] += 1
+        e["first"] = min(e["first"], r["start_ts"])
+        e["last"] = max(e["last"], r["start_ts"])
+    return out
+
+
 def attribute(bikes: list[dict], rides: list[dict]) -> dict[str, str]:
     known = {b["id"] for b in bikes}
     result: dict[str, str] = {}

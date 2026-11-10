@@ -2,7 +2,10 @@
 
 ## 0.3.4
 
+- Bikes: read the odometer from the real Flow app bike profile (`driveUnit.totalDistanceTraveled`); it was always empty, which weakened attributing rides to bikes by odometer.
 - Log: the start line now shows the add-on version and the active log level (e.g. `eBike Rides 0.3.4 listening on :8099 (log level DEBUG)`), and each sync logs its start at debug level, so it is clear whether debug logging is on.
+- Log: a note when rides name a bike id that is not in the bike profile (with per-id ride counts and date ranges at debug level).
+- Debug log: one track is fetched as a sample even when all tracks are already stored, plus a count of stored tracks by status.
 
 ## 0.3.3
 
