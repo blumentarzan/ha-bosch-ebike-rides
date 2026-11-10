@@ -16,6 +16,7 @@
   <nav>
     <button data-tab="map" class="active" data-i18n="tab.map"></button>
     <button data-tab="stats" data-i18n="tab.stats"></button>
+    <button data-tab="year" data-i18n="tab.year"></button>
     <button data-tab="rides" data-i18n="tab.rides"></button>
     <button data-tab="accounts" data-i18n="tab.accounts"></button>
   </nav>
@@ -44,6 +45,7 @@
       <div class="seg" id="map-mode">
         <button data-mode="heat" class="active" data-i18n="map.heat"></button>
         <button data-mode="lines" data-i18n="map.lines"></button>
+        <button data-mode="explore" data-i18n="map.explore"></button>
       </div>
       <label class="intensity muted small"><span data-i18n="map.intensity"></span>
         <input type="range" id="map-intensity" min="1" max="10" step="1" value="5"></label>
@@ -91,6 +93,32 @@
       <h3 data-i18n="stats.compare"></h3>
       <div class="table-wrap"><table id="board"></table></div>
     </div>
+    <div class="card">
+      <h3 data-i18n="rec.title"></h3>
+      <p class="muted small" data-i18n="rec.hint"></p>
+      <div class="table-wrap"><table id="records"></table></div>
+    </div>
+  </section>
+
+  <section id="tab-year" class="tab">
+    <div class="card">
+      <div class="card-head">
+        <h3 data-i18n="year.compare"></h3>
+        <div class="seg" id="yr-metric">
+          <button data-m="km" class="active">km</button>
+          <button data-m="rides" data-i18n="metric.rides"></button>
+          <button data-m="hours" data-i18n="metric.hours"></button>
+          <button data-m="elevation" data-i18n="metric.elevation"></button>
+        </div>
+      </div>
+      <p id="yr-pace" class="pace"></p>
+      <div class="chart-wrap"><canvas id="yr-chart"></canvas></div>
+    </div>
+    <div class="card-head">
+      <h3 class="review-title" data-i18n="year.review"></h3>
+      <select id="yr-year"></select>
+    </div>
+    <div id="review" class="review"></div>
   </section>
 
   <section id="tab-rides" class="tab">
@@ -126,6 +154,7 @@
     <ol id="login-steps"></ol>
     <a id="login-link" class="btn primary" target="_blank" rel="noopener" data-i18n="login.open"></a>
     <textarea id="login-paste" rows="4" data-i18n-ph="login.paste_ph"></textarea>
+    <p id="login-check" class="small muted"></p>
     <p id="login-err" class="err"></p>
     <div class="row">
       <button value="cancel" class="btn" data-i18n="common.cancel"></button>
@@ -138,6 +167,7 @@
   <div class="dlg">
     <h3 id="ride-title"></h3>
     <div id="ride-map"></div>
+    <div class="profile-wrap" id="ride-profile-wrap"><canvas id="ride-profile"></canvas></div>
     <div id="ride-facts" class="facts"></div>
     <div class="row">
       <select id="ride-bike"></select>

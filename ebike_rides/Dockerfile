@@ -10,5 +10,5 @@ COPY config.yaml /opt/config.yaml
 COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
-LABEL io.hass.type="addon" io.hass.version="0.3.5"
+LABEL io.hass.type="addon" io.hass.version="0.4.0"
 CMD ["/run.sh"]

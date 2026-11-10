@@ -35,6 +35,7 @@ class SyncManager:
         self._locks: dict[int, asyncio.Lock] = {}
         self._track_sampled: set[int] = set()
         self._bike_ids_noted: set[str] = set()
+        self._bikes: dict[int, list[dict]] = {}  # last bike profile per account (battery)
         self.progress: dict[int, dict] = {}
         self._task: asyncio.Task | None = None
         self._wake = asyncio.Event()
@@ -115,6 +116,7 @@ class SyncManager:
                 _LOGGER.debug("%s: sync started (source %s)", acc["name"], acc["source"])
                 client = make_client(acc["source"], self.session, self._token_provider(account_id))
                 bikes = await client.bikes()
+                self._bikes[account_id] = bikes
                 self.db.upsert_bikes(account_id, bikes)
                 rides = await client.activities()
                 is_first_import = not self.db.q(
@@ -185,7 +187,9 @@ class SyncManager:
         if not foreign:
             return
         n = sum(e["rides"] for e in foreign.values())
-        level = logging.DEBUG if name in self._bike_ids_noted else logging.INFO
+        # One bike: the rides are on it whatever id they carry (re-registered bike).
+        quiet = name in self._bike_ids_noted or len(bikes) == 1
+        level = logging.DEBUG if quiet else logging.INFO
         self._bike_ids_noted.add(name)
         _LOGGER.log(
             level,
@@ -236,14 +240,18 @@ class SyncManager:
             return
         acc = self.db.account(account_id)
         rides = self.db.q("SELECT * FROM activities a WHERE account_id=?", (account_id,))
-        totals = stats.rider_totals(rides, int(time.time()))
+        now = int(time.time())
+        totals = stats.rider_totals(rides, now)
         last = max(rides, key=lambda r: r["start_ts"], default=None)
         if last:
             last = dict(last)
             last["start_iso"] = datetime.fromtimestamp(
                 last["start_ts"], timezone.utc
             ).isoformat()
-        await self.ha.publish_rider(acc["name"], totals, last)
+            totals["days_since_last"] = (
+                stats.local_dt(now).date() - stats.local_dt(last["start_ts"], last.get("tz")).date()
+            ).days
+        await self.ha.publish_rider(acc["name"], totals, last, self._bikes.get(account_id, []))
 
     # ------------------------------------------------------------------ loop
     async def run_forever(self) -> None:

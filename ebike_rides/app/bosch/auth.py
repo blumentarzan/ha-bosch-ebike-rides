@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 import secrets
 import time
 from dataclasses import dataclass
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import unquote, urlencode
 
 import aiohttp
 
@@ -92,26 +93,37 @@ def start_login(source: str, client_id: str | None = None) -> PendingLogin:
     return PendingLogin(state, verifier, cid, redirect, f"{AUTH_URL}?{urlencode(params)}")
 
 
+_PARAM = r"[?&#]{}=([^&#\s'\"<>]+)"
+
+
+def _param(text: str, name: str) -> str | None:
+    m = re.search(_PARAM.format(name), text)
+    return unquote(m.group(1)) if m else None
+
+
 def extract_code(pasted: str, expected_state: str | None = None) -> str:
-    """Accept the full redirect URL (or just the code) the user pasted."""
+    """Find the login code in whatever the user pasted.
+
+    Accepts the redirect URL, Chrome's console error line ("Failed to launch
+    'onebikeapp-ios://...?state=...&code=...' because the scheme does not have
+    a registered handler."), a copied cURL command or just the bare code.
+    """
     pasted = (pasted or "").strip()
     if not pasted:
         raise AuthError("Nothing pasted")
-    if "code=" not in pasted:
+    error = _param(pasted, "error")
+    if error:
+        raise AuthError(f"Bosch login error: {error}")
+    code = _param(pasted, "code")
+    if code is None:
         # A bare code: Keycloak codes contain dots, never spaces.
-        if " " in pasted or "/" in pasted:
-            raise AuthError("No 'code=' found in the pasted URL")
+        if " " in pasted or "/" in pasted or "=" in pasted:
+            raise AuthError("No 'code=' found in the pasted text")
         return pasted
-    query = urlparse(pasted).query or pasted.split("?", 1)[-1]
-    qs = parse_qs(query)
-    if "error" in qs:
-        raise AuthError(f"Bosch login error: {qs['error'][0]}")
-    if expected_state and qs.get("state", [expected_state])[0] != expected_state:
+    state = _param(pasted, "state")
+    if expected_state and state is not None and state != expected_state:
         raise AuthError("The pasted URL belongs to a different login attempt - start again")
-    try:
-        return qs["code"][0]
-    except (KeyError, IndexError) as err:
-        raise AuthError("No 'code=' found in the pasted URL") from err
+    return code
 
 
 @dataclass

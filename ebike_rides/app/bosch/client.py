@@ -195,9 +195,14 @@ def normalize_bike(raw: dict) -> dict | None:
     name = a.get("name") or a.get("bikeName") or " ".join(
         x for x in (a.get("brandName"), a.get("modelName")) if x
     )
+    batteries = a.get("batteries") if isinstance(a.get("batteries"), list) else []
+    levels = [_num(b.get("batteryLevel")) for b in batteries if isinstance(b, dict)]
+    levels = [v for v in levels if v is not None]
     return {
         "id": bike_id,
         "name": name or "eBike",
+        # null in the profile unless the bike reported recently (seen 2026-11)
+        "battery_pct": levels[0] if levels else None,
         # Mobile API (seen 2026-11): driveUnit.totalDistanceTraveled in metres.
         "odometer_m": _first(
             _num(du.get("totalDistanceTraveled")), _num(du.get("odometer")),

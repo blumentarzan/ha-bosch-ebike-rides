@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -15,7 +16,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
-from . import gpx, stats
+from . import gpx, insights, stats
 from .bosch import auth
 from .db import DB, Filter
 from .ha import HABridge
@@ -228,6 +229,52 @@ def build_app(db: DB, sync: SyncManager, ingress_only: bool = False) -> web.Appl
             }
         )
         return web.json_response(data)
+
+    def _today():
+        return stats.local_dt(int(time.time())).date()
+
+    @r.get("/api/records")
+    async def records(req):
+        rows = db.filtered(_filter(req))
+        accounts = db.accounts()
+        return web.json_response(
+            {"riders": await asyncio.to_thread(insights.records, rows, accounts, _today())}
+        )
+
+    @r.get("/api/explore")
+    async def explore(req):
+        f = _filter(req)
+        # first visits need the whole history up to the end of the period
+        history = db.filtered(Filter(f.accounts, f.bikes, None, f.end), with_geo="cells")
+        accounts = db.accounts()
+        return web.json_response(
+            await asyncio.to_thread(insights.explore, history, accounts, f.start)
+        )
+
+    @r.get("/api/years")
+    async def years(req):
+        f = _filter(req)
+        metric = req.query.get("metric", "km")
+        if metric not in insights.METRIC_FN:
+            return _bad("unknown metric")
+        rows = db.filtered(Filter(f.accounts, f.bikes))
+        return web.json_response(await asyncio.to_thread(insights.year_curves, rows, metric, _today()))
+
+    @r.get("/api/review")
+    async def review(req):
+        f = _filter(req)
+        year = int(req.query.get("year") or _today().year)
+        start = _date_ts(f"{year}-01-01")
+        end = _date_ts(f"{year}-12-31", end=True)
+        rows = db.filtered(Filter(f.accounts, f.bikes, start, end))
+        history = db.filtered(Filter(f.accounts, f.bikes, None, end), with_geo="cells")
+        accounts = db.accounts()
+
+        def build():
+            explored = insights.explore(history, accounts, start, max_cells=0)
+            return insights.review(rows, accounts, explored, year, _today())
+
+        return web.json_response(await asyncio.to_thread(build))
 
     @r.get("/api/heat")
     async def heat(req):

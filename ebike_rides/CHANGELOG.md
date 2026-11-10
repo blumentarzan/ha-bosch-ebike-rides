@@ -1,8 +1,15 @@
 # Changelog
 
-## 0.3.5
+## 0.4.0
 
-- New add-on icon and logo (e-bike with battery and charge bolt), also used as the browser tab icon of the panel.
+- **Records & streaks** in Statistics, per person: longest ride, most climbing, fastest average (from 5 km), top speed, longest moving time, best day / week / month, longest and current day and week streaks. Ride records open the ride.
+- **New roads** on the map (*New*): what was ridden for the first time in the selected period, in orange, plus km of new and of all distinct roads.
+- **Year tab**: all years as cumulative curves (km, rides, hours or elevation), this year compared with the same day last year, and a year in review per person.
+- **Ride details**: elevation and speed profile linked with the map by hover; cadence and calories.
+- **More Home Assistant sensors**: km this month and week, rides this year, days since last ride, battery level per bike when Bosch reports it.
+- **Easier Flow app login**: the dialog accepts the console error line of Chrome/Edge (`Failed to launch 'onebikeapp-ios://…'`), a URL or a cURL command, and checks the pasted text live.
+- Rides of a re-registered bike (other bike id, same single bike) no longer cause an info line in the log.
+- New add-on icon and logo, also used as the browser tab icon of the panel.
 
 ## 0.3.4
 

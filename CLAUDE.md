@@ -17,9 +17,10 @@ The repo is public: no personal names, locations (home/work coordinates), e-mail
   - `attribution.py` – ride → bike: `bikeId` → odometer rewind (1.5 km tolerance) → single bike
   - `geo.py` – Douglas-Peucker simplification; ~25 m grid cells per ride for the heatmap
   - `stats.py` – series per rider (day/week/month/year/weekday/hour), leaderboard, heat aggregation, totals
+  - `insights.py` – records & day/week streaks, explorer (first ride per cell → "new roads"), year curves + pace vs last year, year review
   - `db.py` – SQLite at `/data/rides.db` (accounts, pending_logins, bikes, activities, tracks)
   - `main.py` – aiohttp app on :8099; Ingress-only guard when `SUPERVISOR_TOKEN` is set
-  - `ha.py` – sensors `sensor.ebike_<name>_km_this_year` / `_last_ride`, event `ebike_rides_new_activity`
+  - `ha.py` – sensors `sensor.ebike_<name>_km_this_year` / `_km_this_month` / `_km_this_week` / `_rides_this_year` / `_days_since_last_ride` / `_last_ride`, `_<bike>_battery` (only when Bosch reports `batteryLevel`), event `ebike_rides_new_activity`
   - `static/` – vanilla JS UI (Leaflet, Chart.js vendored), custom canvas heat layer
 - `tests/fake_bosch.py` – fake Bosch cloud (token endpoint, mobile + Data Act APIs, generated rides)
 - `scripts/upstream_watch.py` + `.github/upstream.json` – daily check of upstream projects
@@ -51,5 +52,5 @@ Release: bump `version` in `ebike_rides/config.yaml` (and the Dockerfile label),
 - **Real Bosch API, mobile source (checked 2026-11, one account):** activity list matches `normalize_activity` (`attributes`-wrapped, epoch seconds, distance m, speed km/h, `meta.pages`, page size 200). Bike profile is `{"data": [ECBSBikeProfileDto]}` with the odometer in `driveUnit.totalDistanceTraveled` (m); `fake_bosch.py` mirrors it. Rides may carry a `bikeId` that is not in the bike profile (cause unknown: other id scheme or replaced bike) – the sync logs it; check with the per-id debug line before changing attribution.
 - Still unchecked against real answers: mobile track detail shape (sampled at debug level since 0.3.4), the whole Data Act source. With `log_level: debug` the client logs one redacted raw answer per endpoint (`redact()`/`check_activities()` in `bosch/client.py`). When fixing a mapping, add the real (redacted) shape to `tests/fake_bosch.py`.
 - Data Act source: unclear whether Swiss accounts get data (EU only); mobile source is the default.
-- Mobile login needs the redirect URL from browser DevTools (Network → `oauth2redirect`); consider a smoother flow later.
-- Ideas: privacy zone around home (hide start/end), per-bike odometer chart, yearly goal per person, weather overlay.
+- Mobile login still needs browser DevTools: the redirect goes to `onebikeapp-ios://`, which no web page can catch (custom schemes cannot be registered by a site). `extract_code` accepts the Chrome/Edge console line, URLs and cURL; the dialog checks the paste live.
+- Ideas: privacy zone around home (hide start/end), per-bike odometer chart, yearly goal per person, weather overlay, commute detection, GPX/FIT import of older rides.

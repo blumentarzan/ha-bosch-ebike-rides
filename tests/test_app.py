@@ -40,6 +40,17 @@ def test_extract_code_variants():
         auth.extract_code("https://x/?error=access_denied")
 
 
+def test_extract_code_from_console_and_curl():
+    console = (f"Failed to launch '{auth.MOBILE_REDIRECT}?state=abc&session_state=x&code=c0de.1.2' "
+               "because the scheme does not have a registered handler.")
+    assert auth.extract_code(console, "abc") == "c0de.1.2"
+    curl = f"curl '{auth.MOBILE_REDIRECT}?state=abc&code=c0de.1.2' -H 'accept: */*'"
+    assert auth.extract_code(curl, "abc") == "c0de.1.2"
+    assert auth.extract_code(f"{auth.MOBILE_REDIRECT}?code=c%2Ed&state=abc", "abc") == "c.d"
+    with pytest.raises(auth.AuthError):
+        auth.extract_code("Failed to launch something else entirely")
+
+
 def test_login_url_has_pkce():
     p = auth.start_login("mobile")
     assert "code_challenge=" in p.url and "client_id=one-bike-app" in p.url
@@ -111,7 +122,9 @@ def test_normalize_bike_mobile_profile_shape():
         "driveUnit": {"productName": "Performance Line", "totalDistanceTraveled": 1234567.0},
     }}
     bike = normalize_bike(raw)
-    assert bike == {"id": "b1", "name": "Generic Bikes", "odometer_m": 1234567.0}
+    assert bike == {"id": "b1", "name": "Generic Bikes", "battery_pct": None, "odometer_m": 1234567.0}
+    raw["attributes"]["batteries"] = [{"batteryLevel": None}, {"batteryLevel": 64}]
+    assert normalize_bike(raw)["battery_pct"] == 64
 
 
 def test_ride_bike_ids():
@@ -329,9 +342,11 @@ async def test_second_sync_samples_track_and_counts(env, caplog):
 async def test_rides_with_unknown_bike_id_are_reported(env, caplog):
     db, mgr, client, fake = env
     caplog.set_level(logging.DEBUG, logger="app.sync")
-    bikes = [{"id": "profile-bike"}]
+    bikes = [{"id": "profile-bike"}, {"id": "second-bike"}]
     rides = [{"bike_id": "ride-bike", "start_ts": 1_700_000_000},
              {"bike_id": "profile-bike", "start_ts": 1_710_000_000}]
+    mgr._log_bike_ids("Alex", bikes[:1], rides)  # one bike: re-registered, debug only
+    assert not [r for r in caplog.records if r.levelno >= logging.INFO]
     mgr._log_bike_ids("Sam", bikes, rides)
     mgr._log_bike_ids("Sam", bikes, rides)
     msgs = [(r.levelno, r.getMessage()) for r in caplog.records]
@@ -341,3 +356,106 @@ async def test_rides_with_unknown_bike_id_are_reported(env, caplog):
     detail = [m for lvl, m in msgs if "bike ids on rides" in m][0]
     assert "ride-bik (not in profile): 1 rides 2023-11-14..2023-11-14" in detail
     assert "profile-: 1 rides" in detail
+
+
+# ------------------------------------------------------------------ insights
+
+from datetime import date, datetime  # noqa: E402
+
+from app import insights  # noqa: E402
+
+
+def test_day_and_week_runs():
+    d = date(2026, 3, 2)  # a Monday
+    days = {d, d + timedelta(1), d + timedelta(2), d + timedelta(10), d + timedelta(11)}
+    runs = insights.day_runs(days, today=d + timedelta(12))
+    assert runs["longest"] == {"value": 3, "from": "2026-03-02", "to": "2026-03-04"}
+    assert runs["current"] == 2  # last ride yesterday still counts
+    assert insights.day_runs(days, today=d + timedelta(13))["current"] == 0
+    weeks = insights.week_runs(days | {d + timedelta(21)}, today=d + timedelta(22))
+    assert weeks["longest"]["value"] == 2 and weeks["current"] == 1  # weeks 1, 2 and 4
+
+
+def test_records_pick_best_rides():
+    accs = [{"id": 1, "name": "Alex", "color": "#000"}]
+    base = int(datetime(2026, 5, 4, 8).timestamp())
+    rides = [
+        {"id": "a", "account_id": 1, "start_ts": base, "distance_m": 30_000, "elevation_gain_m": 100,
+         "avg_speed_kmh": 20, "max_speed_kmh": 40, "duration_s": 5400},
+        {"id": "b", "account_id": 1, "start_ts": base + 3600, "distance_m": 2_000, "elevation_gain_m": 300,
+         "avg_speed_kmh": 30, "max_speed_kmh": 30, "duration_s": 300},
+        {"id": "c", "account_id": 1, "start_ts": base + 86400, "distance_m": 10_000, "elevation_gain_m": 0,
+         "avg_speed_kmh": 25, "max_speed_kmh": 35, "duration_s": 1500},
+    ]
+    rec = insights.records(rides, accs, date(2026, 5, 5))[0]["records"]
+    assert rec["longest_km"]["id"] == "a" and rec["longest_km"]["value"] == 30
+    assert rec["climb_m"]["id"] == "b"
+    assert rec["fastest_kmh"]["id"] == "c"  # "b" is faster but shorter than 5 km
+    assert rec["best_day_km"] == {"value": 32.0, "key": "2026-05-04"}
+    assert rec["day_streak"]["longest"]["value"] == 2 and rec["day_streak"]["current"] == 2
+
+
+def test_year_curves_and_pace():
+    rides = [{"start_ts": int(datetime(y, 1, 10, 12).timestamp()), "distance_m": d}
+             for y, d in ((2025, 10_000), (2025, 5_000), (2026, 20_000))]
+    rides.append({"start_ts": int(datetime(2025, 6, 1, 12).timestamp()), "distance_m": 7_000})
+    c = insights.year_curves(rides, "km", date(2026, 2, 1))
+    y26, y25 = c["years"]
+    assert (y26["year"], y25["year"]) == (2026, 2025)
+    assert y26["values"][31] == 20 and y26["values"][32] is None  # nothing after today
+    assert y25["total"] == 22 and len(y25["values"]) == 366
+    assert c["pace"] == {"now": 20, "last_year": 15}
+
+
+async def test_records_explore_years_review_endpoints(env):
+    db, mgr, client, fake = env
+    a1 = await _login(client, mgr, "Alex", "mobile", "code-1")
+    await _login(client, mgr, "Sam", "dataact", "code-2", client_id="euda-test")
+    rec = await (await client.get("/api/records")).json()
+    assert {r["name"] for r in rec["riders"]} == {"Alex", "Sam"}
+    assert rec["riders"][0]["records"]["longest_km"]["value"] > 0
+
+    everything = await (await client.get(f"/api/explore?accounts={a1}")).json()
+    assert everything["all_new"] and everything["new"] == everything["total"] > 0
+    first, last = db.q("SELECT MIN(start_ts) lo, MAX(start_ts) hi FROM activities WHERE account_id=?", (a1,))[0].values()
+    mid = datetime.fromtimestamp((first + last) // 2).date().isoformat()
+    later = await (await client.get(f"/api/explore?accounts={a1}&from={mid}")).json()
+    assert not later["all_new"] and 0 <= later["new"] < later["total"] == everything["total"]
+    assert sum(c[2] for c in later["cells"]) == later["new"]
+    assert later["riders"][0]["new_cells"] == later["new"]
+
+    years = await (await client.get("/api/years?metric=rides")).json()
+    assert sum(y["values"][365] or y["values"][years["today_doy"] - 1] or 0
+               for y in years["years"]) == 230
+    assert (await client.get("/api/years?metric=nope")).status == 400
+
+    year = years["years"][0]["year"]
+    rv = await (await client.get(f"/api/review?year={year}")).json()
+    assert rv["year"] == year and rv["riders"]
+    r0 = rv["riders"][0]
+    assert abs(sum(r0["months"]) - r0["km"]) < 0.7 and 1 <= r0["top_month"]["month"] <= 12
+
+
+async def test_sensors_published(monkeypatch):
+    monkeypatch.setenv("SUPERVISOR_TOKEN", "x")
+    posted = {}
+
+    async with aiohttp.ClientSession() as session:
+        bridge = HABridge(session, True)
+
+        async def fake_post(path, payload):
+            posted[path.removeprefix("/states/")] = payload
+
+        bridge._post = fake_post
+        totals = {"year_km": 1234.56, "year_rides": 80, "month_km": 99.9, "week_km": 12.3,
+                  "total_km": 4000, "days_since_last": 2}
+        bikes = [{"id": "b1", "name": "City", "battery_pct": 64.4}, {"id": "b2", "name": "MTB", "battery_pct": None}]
+        await bridge.publish_rider("Alex", totals, {"distance_m": 5000, "start_iso": "x"}, bikes)
+    assert posted["sensor.ebike_alex_km_this_week"]["state"] == 12.3
+    assert posted["sensor.ebike_alex_km_this_month"]["state"] == 99.9
+    assert posted["sensor.ebike_alex_rides_this_year"]["state"] == 80
+    days = posted["sensor.ebike_alex_days_since_last_ride"]
+    assert days["state"] == 2 and days["attributes"]["device_class"] == "duration"
+    assert posted["sensor.ebike_alex_city_battery"]["state"] == 64
+    assert "sensor.ebike_alex_mtb_battery" not in posted
+    assert posted["sensor.ebike_alex_km_this_year"]["attributes"]["rides_this_year"] == 80
