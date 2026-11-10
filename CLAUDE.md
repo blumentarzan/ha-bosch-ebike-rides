@@ -51,5 +51,4 @@ Release: bump `version` in `ebike_rides/config.yaml` (and the Dockerfile label),
 - **Not yet tested against the real Bosch API.** First real sync: check field names in `normalize_*` against real answers (log at debug level), especially Data Act distance units and the mobile bike-profile shape.
 - Data Act source: unclear whether Swiss accounts get data (EU only); mobile source is the default.
 - Mobile login needs the redirect URL from browser DevTools (Network → `oauth2redirect`); consider a smoother flow later.
-- CI add-on linter and Docker smoke test have not run yet.
 - Ideas: privacy zone around home (hide start/end), per-bike odometer chart, yearly goal per person, weather overlay.
