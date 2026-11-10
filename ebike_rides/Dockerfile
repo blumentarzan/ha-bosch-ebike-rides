@@ -6,8 +6,9 @@ COPY requirements.txt /opt/requirements.txt
 RUN pip install --no-cache-dir -r /opt/requirements.txt \
     && apk add --no-cache tzdata
 COPY app /opt/app
+COPY config.yaml /opt/config.yaml
 COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
-LABEL io.hass.type="addon" io.hass.version="0.3.3"
+LABEL io.hass.type="addon" io.hass.version="0.3.4"
 CMD ["/run.sh"]

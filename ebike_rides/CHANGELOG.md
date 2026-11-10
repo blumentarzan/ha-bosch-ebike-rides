@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- Log: the start line now shows the add-on version and the active log level (e.g. `eBike Rides 0.3.4 listening on :8099 (log level DEBUG)`), and each sync logs its start at debug level, so it is clear whether debug logging is on.
+
 ## 0.3.3
 
 - Diagnostics for the first syncs against the real Bosch API: with `log_level: debug` the log shows one redacted raw answer per endpoint and what was parsed from it, ready to paste into an issue (see "Troubleshooting" in the documentation).

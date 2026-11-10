@@ -18,7 +18,7 @@ from app.bosch import auth  # noqa: E402
 from app.bosch.client import check_activities, normalize_activity, normalize_track, redact  # noqa: E402
 from app.db import DB  # noqa: E402
 from app.ha import HABridge  # noqa: E402
-from app.main import build_app  # noqa: E402
+from app.main import _version, build_app  # noqa: E402
 from app.sync import SyncManager  # noqa: E402
 
 import fake_bosch  # noqa: E402
@@ -96,6 +96,11 @@ def test_check_activities_flags_wrong_mapping():
     assert any("none of 4" in p for p in check_activities(4, []))
     no_elev = [dict(r, elevation_gain_m=None) for r in good]
     assert check_activities(3, no_elev) == ["elevation gain missing in all 3 rides"]
+
+
+def test_version_from_config_yaml():
+    config = (ROOT / "ebike_rides" / "config.yaml").read_text()
+    assert f'version: "{_version()}"' in config
 
 
 def test_attribution_by_odometer():

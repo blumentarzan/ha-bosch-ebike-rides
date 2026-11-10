@@ -110,6 +110,7 @@ class SyncManager:
                 return
             prog = self.progress[account_id] = {"phase": "rides", "done": 0, "total": 0}
             try:
+                _LOGGER.debug("%s: sync started (source %s)", acc["name"], acc["source"])
                 client = make_client(acc["source"], self.session, self._token_provider(account_id))
                 bikes = await client.bikes()
                 self.db.upsert_bikes(account_id, bikes)
