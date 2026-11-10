@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- OSM tile servers block requests without a Referer; HA may send no-referrer. -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>eBike Rides</title>
+<link rel="stylesheet" href="static/vendor/leaflet.css">
+<link rel="stylesheet" href="static/style.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<header>
+  <div class="brand">eBike Rides</div>
+  <nav>
+    <button data-tab="map" class="active" data-i18n="tab.map"></button>
+    <button data-tab="stats" data-i18n="tab.stats"></button>
+    <button data-tab="rides" data-i18n="tab.rides"></button>
+    <button data-tab="accounts" data-i18n="tab.accounts"></button>
+  </nav>
+</header>
+
+<section id="filters">
+  <select id="f-range">
+    <option value="year" data-i18n="range.year"></option>
+    <option value="lastyear" data-i18n="range.lastyear"></option>
+    <option value="12m" data-i18n="range.12m"></option>
+    <option value="month" data-i18n="range.month"></option>
+    <option value="all" selected data-i18n="range.all"></option>
+    <option value="custom" data-i18n="range.custom"></option>
+  </select>
+  <span id="f-custom" hidden>
+    <input type="date" id="f-from"> – <input type="date" id="f-to">
+  </span>
+  <div id="f-riders" class="chips"></div>
+  <select id="f-bike"></select>
+</section>
+
+<main>
+  <section id="tab-map" class="tab active">
+    <div class="map-tools">
+      <div class="seg" id="map-mode">
+        <button data-mode="heat" class="active" data-i18n="map.heat"></button>
+        <button data-mode="lines" data-i18n="map.lines"></button>
+      </div>
+      <span id="map-info" class="muted"></span>
+      <span id="legend" class="legend" hidden></span>
+    </div>
+    <div id="map"></div>
+  </section>
+
+  <section id="tab-stats" class="tab">
+    <div id="kpis" class="kpis"></div>
+    <div class="card">
+      <div class="card-head">
+        <div class="seg" id="st-group">
+          <button data-g="day" data-i18n="group.day"></button>
+          <button data-g="week" data-i18n="group.week"></button>
+          <button data-g="month" class="active" data-i18n="group.month"></button>
+          <button data-g="year" data-i18n="group.year"></button>
+          <button data-g="weekday" data-i18n="group.weekday"></button>
+          <button data-g="hour" data-i18n="group.hour"></button>
+        </div>
+        <div class="seg" id="st-metric">
+          <button data-m="km" class="active">km</button>
+          <button data-m="rides" data-i18n="metric.rides"></button>
+          <button data-m="hours" data-i18n="metric.hours"></button>
+          <button data-m="elevation" data-i18n="metric.elevation"></button>
+        </div>
+        <label class="muted"><input type="checkbox" id="st-cum"> <span data-i18n="stats.cumulative"></span></label>
+      </div>
+      <div class="day-nav" id="day-nav" hidden>
+        <button class="btn" id="day-prev" data-i18n-title="day.prev">◀</button>
+        <input type="date" id="day-date" data-i18n-title="day.pick">
+        <button class="btn" id="day-next" data-i18n-title="day.next">▶</button>
+        <button class="btn" id="day-today" data-i18n="day.today"></button>
+        <span class="muted small" id="day-span"></span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    </div>
+    <div class="card" id="day-card" hidden>
+      <h3 id="day-title"></h3>
+      <div id="day-sum" class="muted small"></div>
+      <div class="table-wrap"><table id="day-rides"></table></div>
+    </div>
+    <div class="card">
+      <h3 data-i18n="stats.compare"></h3>
+      <div class="table-wrap"><table id="board"></table></div>
+    </div>
+  </section>
+
+  <section id="tab-rides" class="tab">
+    <div class="card-head">
+      <span id="rides-count" class="muted"></span>
+      <a id="export" class="btn" href="#" data-i18n="rides.export"></a>
+    </div>
+    <div class="table-wrap"><table id="rides"></table></div>
+  </section>
+
+  <section id="tab-accounts" class="tab">
+    <div id="acc-list"></div>
+    <div class="card">
+      <h3 data-i18n="acc.add_title"></h3>
+      <form id="acc-form" class="form">
+        <input name="name" data-i18n-ph="acc.name_ph" required>
+        <input name="color" type="color" value="#2f7ed8" data-i18n-title="acc.color">
+        <select name="source">
+          <option value="mobile" data-i18n="acc.src_mobile"></option>
+          <option value="dataact" data-i18n="acc.src_dataact"></option>
+        </select>
+        <input name="client_id" data-i18n-ph="acc.client_id_ph" hidden>
+        <button class="btn primary" data-i18n="acc.add"></button>
+      </form>
+    </div>
+    <p class="muted small" id="bridge-info"></p>
+  </section>
+</main>
+
+<dialog id="login-dlg">
+  <form method="dialog" class="dlg">
+    <h3><span data-i18n="login.title"></span> – <span id="login-name"></span></h3>
+    <ol id="login-steps"></ol>
+    <a id="login-link" class="btn primary" target="_blank" rel="noopener" data-i18n="login.open"></a>
+    <textarea id="login-paste" rows="4" data-i18n-ph="login.paste_ph"></textarea>
+    <p id="login-err" class="err"></p>
+    <div class="row">
+      <button value="cancel" class="btn" data-i18n="common.cancel"></button>
+      <button id="login-ok" value="default" class="btn primary" data-i18n="login.connect"></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="ride-dlg">
+  <div class="dlg">
+    <h3 id="ride-title"></h3>
+    <div id="ride-map"></div>
+    <div id="ride-facts" class="facts"></div>
+    <div class="row">
+      <select id="ride-bike"></select>
+      <a id="ride-gpx" class="btn">GPX</a>
+      <button class="btn" onclick="this.closest('dialog').close()" data-i18n="common.close"></button>
+    </div>
+  </div>
+</dialog>
+
+<script src="static/vendor/leaflet.js"></script>
+<script src="static/vendor/chart.umd.js"></script>
+<script src="static/i18n.js"></script>
+<script src="static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "_comment": "Files in the projects we learned the Bosch API from. The watcher opens an issue when any of them changes, listing new API paths that our client does not use yet. Update 'sha' fields by running scripts/upstream_watch.py --update.",
+  "repos": {
+    "partymola/bosch-flow-mcp": {
+      "files": [
+        "src/bosch_flow_mcp/config.py",
+        "src/bosch_flow_mcp/auth.py",
+        "src/bosch_flow_mcp/tools/activity_tools.py",
+        "src/bosch_flow_mcp/tools/sync_tools.py"
+      ],
+      "sha": {
+        "src/bosch_flow_mcp/config.py": "2c1f8b6d26760b4c456fdc24a87a3ea046903647",
+        "src/bosch_flow_mcp/auth.py": "13474d2c011de4d718abb2890bc36c7dd9ba70a2",
+        "src/bosch_flow_mcp/tools/activity_tools.py": "6a41535417e261899843beb01e952199061e1d21",
+        "src/bosch_flow_mcp/tools/sync_tools.py": "59d655ee5826a303f8540193f610ee15f67c87c6"
+      },
+      "head": "01fb4de98ba06ab98ef2d35eba6337a9fb17742d"
+    },
+    "Xunil99/ha-bosch-ebike": {
+      "files": [
+        "custom_components/ha_bosch_ebike/const.py",
+        "custom_components/ha_bosch_ebike/api.py",
+        "custom_components/ha_bosch_ebike/activity_attribution.py"
+      ],
+      "sha": {
+        "custom_components/ha_bosch_ebike/const.py": "2916e7c41afd8f4a873ea3335ec433ae1586b6b5",
+        "custom_components/ha_bosch_ebike/api.py": "a19ce91907989389b610d434191430f9fdf3bee9",
+        "custom_components/ha_bosch_ebike/activity_attribution.py": "6e52525a5e61300bae88095663f949766a5ed4dc"
+      },
+      "head": "f7bdcc0980b781723d913cf18f699cfb767c989e"
+    }
+  }
+}

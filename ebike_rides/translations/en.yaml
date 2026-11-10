@@ -1,0 +1,12 @@
+configuration:
+  sync_interval_minutes:
+    name: Sync interval (minutes)
+    description: How often to look for new rides.
+  detail_delay_seconds:
+    name: Delay between track downloads (seconds)
+    description: Keeps the initial import gentle on the Bosch API.
+  publish_sensors:
+    name: Sensors in Home Assistant
+    description: Per-person distance sensors and an event per new ride.
+  log_level:
+    name: Log level

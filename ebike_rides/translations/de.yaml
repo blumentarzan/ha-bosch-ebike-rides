@@ -1,0 +1,12 @@
+configuration:
+  sync_interval_minutes:
+    name: Sync-Intervall (Minuten)
+    description: Wie oft nach neuen Fahrten geschaut wird.
+  detail_delay_seconds:
+    name: Pause zwischen Track-Abrufen (Sekunden)
+    description: Schont die Bosch-Schnittstelle beim Erstimport.
+  publish_sensors:
+    name: Sensoren in Home Assistant
+    description: Pro Person km-Sensoren und ein Event pro neuer Fahrt.
+  log_level:
+    name: Log-Level

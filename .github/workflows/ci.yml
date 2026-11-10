@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r ebike_rides/requirements.txt pytest pytest-asyncio
+      - run: python -m pytest -q
+
+  addon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint add-on config
+        uses: frenck/action-addon-linter@v2
+        with:
+          path: "./ebike_rides"
+      - name: Build image (amd64)
+        run: docker build -t ebike-rides ./ebike_rides
+      - name: Smoke test
+        run: |
+          docker run -d --name t -p 8099:8099 -e DB_PATH=/tmp/r.db -e OPTIONS_PATH=/nonexistent ebike-rides
+          for i in $(seq 1 20); do curl -fs localhost:8099/api/state && break; sleep 1; done
+          curl -fs localhost:8099/ | grep -q "eBike Rides"
+          docker logs t
