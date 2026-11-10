@@ -99,6 +99,10 @@ def generate(account: int, seed: int, count: int, bikes: list[str]):
     return bike_list, rides, tracks
 
 
+# Tests set this to answer ride details in a shape the client does not know.
+BROKEN_TRACKS = False
+
+
 def make_app(n1: int = 160, n2: int = 70) -> web.Application:
     data = {
         "tok-1": generate(1, 1, n1, ["bikeA1", "bikeA2"]),
@@ -149,7 +153,8 @@ def make_app(n1: int = 160, n2: int = 70) -> web.Application:
         t = tracks.get(req.match_info["id"])
         if t is None:
             raise web.HTTPNotFound()
-        return web.json_response({"data": {"attributes": {"activityData": t}}})
+        key = "trackPoints" if BROKEN_TRACKS else "activityData"
+        return web.json_response({"data": {"attributes": {key: t}}})
 
     async def d_acts(req):
         _, rides, _ = _acct(req)

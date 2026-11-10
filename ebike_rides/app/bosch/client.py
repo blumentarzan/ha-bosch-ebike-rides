@@ -88,6 +88,104 @@ def to_epoch(value: Any) -> int | None:
     return None
 
 
+# ----------------------------------------------------------- diagnostics
+
+# Keys whose values never belong in a log (matched as substrings, lower case).
+_SECRET_KEYS = (
+    "token", "secret", "password", "email", "phone", "serial", "vin", "frame",
+    "firstname", "lastname", "username", "address", "street", "city", "zip",
+    "title", "description", "note",
+)
+# Keys redacted only on an exact match (``brandName``/``modelName`` stay).
+_SECRET_EXACT = {"name", "nickname", "displayname"}
+# Keys holding positions: numbers below them are rounded to ~10 km.
+_COORD_KEYS = ("lat", "lon", "lng", "coord", "position", "location", "geometry")
+
+
+def _round_coords(obj: Any) -> Any:
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, float):
+        return round(obj, 1)
+    if isinstance(obj, list):
+        return [_round_coords(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _round_coords(v) for k, v in obj.items()}
+    return obj
+
+
+def redact(obj: Any, list_items: int = 2, _depth: int = 0) -> Any:
+    """Copy of an API answer that is safe to paste into a public issue.
+
+    Keeps every key and the type/unit of every value (that is what we need to
+    check the field mapping), but drops secrets and personal text, rounds
+    positions to one decimal and shortens lists to their first items.
+    """
+    if _depth > 10:
+        return "..."
+    if isinstance(obj, dict):
+        out: dict = {}
+        for k, v in obj.items():
+            kl = str(k).lower()
+            secret = kl in _SECRET_EXACT or any(s in kl for s in _SECRET_KEYS)
+            if secret and not isinstance(v, (dict, list)):
+                out[k] = "<redacted>" if v not in (None, "") else v
+            elif any(s in kl for s in _COORD_KEYS):
+                out[k] = redact(_round_coords(v), list_items, _depth + 1)
+            else:
+                out[k] = redact(v, list_items, _depth + 1)
+        return out
+    if isinstance(obj, list):
+        items = [redact(x, list_items, _depth + 1) for x in obj[:list_items]]
+        if len(obj) > list_items:
+            items.append(f"... {len(obj) - list_items} more")
+        return items
+    if isinstance(obj, str) and "@" in obj:
+        return "<redacted>"
+    return obj
+
+
+def _dump(obj: Any, limit: int = 4000) -> str:
+    import json
+
+    text = json.dumps(redact(obj), default=str, ensure_ascii=False)
+    return text if len(text) <= limit else text[:limit] + f"... ({len(text)} chars)"
+
+
+def _median(values: list[float]) -> float | None:
+    vals = sorted(v for v in values if v)
+    return vals[len(vals) // 2] if vals else None
+
+
+def check_activities(raw_count: int, rides: list[dict]) -> list[str]:
+    """Plausibility problems of a parsed ride list (hints for a wrong mapping)."""
+    problems: list[str] = []
+    if raw_count and not rides:
+        problems.append(f"none of {raw_count} rides could be parsed (no id or startTime)")
+        return problems
+    if raw_count > len(rides):
+        problems.append(f"{raw_count - len(rides)} of {raw_count} rides skipped (no id or startTime)")
+    if not rides:
+        return problems
+    for field, label in (
+        ("distance_m", "distance"), ("duration_s", "duration"),
+        ("elevation_gain_m", "elevation gain"), ("avg_speed_kmh", "average speed"),
+        ("start_odometer_m", "start odometer"),
+    ):
+        missing = sum(1 for r in rides if not r.get(field))
+        if missing == len(rides):
+            problems.append(f"{label} missing in all {len(rides)} rides")
+        elif field in ("distance_m", "duration_s") and missing:
+            problems.append(f"{label} missing in {missing} of {len(rides)} rides")
+    dist = _median([r.get("distance_m") or 0 for r in rides])
+    if dist is not None and dist < 100:
+        problems.append(f"median distance {dist:g} m looks like km, not m")
+    speed = _median([r.get("avg_speed_kmh") or 0 for r in rides])
+    if speed is not None and (speed < 8 or speed > 60):
+        problems.append(f"median average speed {speed:g} km/h is implausible (unit?)")
+    return problems
+
+
 def normalize_bike(raw: dict) -> dict | None:
     a = _attrs(raw)
     bike_id = raw.get("id") or raw.get("bikeId") or a.get("id") or a.get("bikeId")
@@ -165,6 +263,51 @@ class _BaseClient:
     def __init__(self, session: aiohttp.ClientSession, token: TokenProvider) -> None:
         self._session = session
         self._token = token
+        self._sampled: set[str] = set()
+
+    def _sample(self, endpoint: str, resp: Any) -> None:
+        """Log one redacted raw answer per endpoint and sync (debug level)."""
+        if endpoint in self._sampled or not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+        self._sampled.add(endpoint)
+        _LOGGER.debug("%s %s raw: %s", type(self).__name__, endpoint, _dump(resp))
+
+    def _check_bikes(self, raw: list, bikes: list[dict]) -> list[dict]:
+        if raw and len(bikes) < len(raw):
+            _LOGGER.warning(
+                "%s: %d of %d bikes could not be parsed (no id) - enable debug log "
+                "and report the 'bikes raw' line", type(self).__name__, len(raw) - len(bikes), len(raw),
+            )
+        _LOGGER.debug("%s bikes parsed: %s", type(self).__name__, _dump(bikes))
+        return bikes
+
+    def _check_rides(self, raw: list, rides: list[dict]) -> list[dict]:
+        for problem in check_activities(len(raw), rides):
+            _LOGGER.warning(
+                "%s: %s - enable debug log and report the 'activities raw' line",
+                type(self).__name__, problem,
+            )
+        if rides:
+            _LOGGER.debug("%s first ride parsed: %s", type(self).__name__, _dump(rides[0]))
+        return rides
+
+    def _check_track(self, activity_id: str, resp: Any, points: list) -> list:
+        self._sample("track", resp)
+        if resp and not points and "track-empty" not in self._sampled:
+            self._sampled.add("track-empty")
+            keys = sorted(resp) if isinstance(resp, dict) else type(resp).__name__
+            _LOGGER.warning(
+                "%s: ride %s has a detail answer but no GPS points were found (keys: %s) "
+                "- enable debug log and report the 'track raw' line",
+                type(self).__name__, activity_id, keys,
+            )
+        elif points and "track-parsed" not in self._sampled:
+            self._sampled.add("track-parsed")
+            _LOGGER.debug(
+                "%s track parsed: %d points, first [lat, lon, ele, speed] = %s",
+                type(self).__name__, len(points), _round_coords(points[0]),
+            )
+        return points
 
     async def _get(self, url: str) -> Any:
         for attempt in range(4):
@@ -233,7 +376,9 @@ class MobileClient(_BaseClient):
 
     async def bikes(self) -> list[dict]:
         resp = await self._get(f"{MOBILE_PROFILE_BASE}/v1/bike-profile")
-        return [b for b in (normalize_bike(x) for x in _bike_list(resp)) if b]
+        self._sample("bikes", resp)
+        raw = _bike_list(resp)
+        return self._check_bikes(raw, [b for b in (normalize_bike(x) for x in raw) if b])
 
     async def activities(self) -> list[dict]:
         items: list = []
@@ -241,6 +386,7 @@ class MobileClient(_BaseClient):
         while True:
             q = f"?size={self.PAGE}" + (f"&page={page}" if page else "")
             resp = await self._get(f"{MOBILE_ACTIVITY_BASE}/v1/activity{q}")
+            self._sample("activities", resp)
             if not isinstance(resp, dict):
                 break
             batch = resp.get("data") or []
@@ -249,11 +395,11 @@ class MobileClient(_BaseClient):
             page += 1
             if page >= pages or not batch or page > 200:
                 break
-        return [a for a in (normalize_activity(x) for x in items) if a]
+        return self._check_rides(items, [a for a in (normalize_activity(x) for x in items) if a])
 
     async def track(self, activity_id: str) -> list[list[float | None]]:
         resp = await self._get(f"{MOBILE_ACTIVITY_BASE}/v1/activity/{activity_id}/detail")
-        return normalize_track(resp)
+        return self._check_track(activity_id, resp, normalize_track(resp))
 
 
 class DataActClient(_BaseClient):
@@ -261,7 +407,9 @@ class DataActClient(_BaseClient):
 
     async def bikes(self) -> list[dict]:
         resp = await self._get(f"{DATAACT_BASE}/bike-profile/smart-system/v1/bikes")
-        return [b for b in (normalize_bike(x) for x in _bike_list(resp)) if b]
+        self._sample("bikes", resp)
+        raw = _bike_list(resp)
+        return self._check_bikes(raw, [b for b in (normalize_bike(x) for x in raw) if b])
 
     async def activities(self) -> list[dict]:
         items: list = []
@@ -271,6 +419,7 @@ class DataActClient(_BaseClient):
                 f"{DATAACT_BASE}/activity/smart-system/v1/activities"
                 f"?limit={self.PAGE}&offset={offset}&sort=-startTime"
             )
+            self._sample("activities", resp)
             if not isinstance(resp, dict):
                 break
             batch = resp.get("activitySummaries") or []
@@ -279,13 +428,13 @@ class DataActClient(_BaseClient):
             offset += self.PAGE
             if not batch or offset >= total or offset > 20_000:
                 break
-        return [a for a in (normalize_activity(x) for x in items) if a]
+        return self._check_rides(items, [a for a in (normalize_activity(x) for x in items) if a])
 
     async def track(self, activity_id: str) -> list[list[float | None]]:
         resp = await self._get(
             f"{DATAACT_BASE}/activity/smart-system/v1/activities/{activity_id}/details"
         )
-        return normalize_track(resp)
+        return self._check_track(activity_id, resp, normalize_track(resp))
 
 
 def make_client(source: str, session: aiohttp.ClientSession, token: TokenProvider) -> _BaseClient:

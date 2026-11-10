@@ -10,3 +10,4 @@ configuration:
     description: Per-person distance sensors and an event per new ride.
   log_level:
     name: Log level
+    description: 'Use "debug" to log (redacted) raw answers of the Bosch API when values look wrong.'
