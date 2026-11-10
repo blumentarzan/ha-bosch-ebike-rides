@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import os
+import re
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ from .sync import SyncManager
 _LOGGER = logging.getLogger("ebike_rides")
 STATIC = Path(__file__).parent / "static"
 INGRESS_IP = "172.30.32.2"
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 PUBLIC_ACCOUNT_FIELDS = (
     "id", "name", "color", "source", "client_id", "status", "last_error", "last_sync",
 )
@@ -132,11 +134,13 @@ def build_app(db: DB, sync: SyncManager, ingress_only: bool = False) -> web.Appl
         name = (body.get("name") or "").strip()
         source = body.get("source") or "mobile"
         if not name:
-            return _bad("Name fehlt")
+            return _bad("Name is missing")
         if source not in auth.SOURCES:
             return _bad("unknown source")
         if source == "dataact" and not (body.get("client_id") or "").strip():
-            return _bad("Data Act braucht eine Client-ID")
+            return _bad("Data Act needs a client ID")
+        if body.get("color") and not COLOR_RE.match(body["color"]):
+            return _bad("invalid colour")
         aid = db.add_account(name, source, (body.get("client_id") or "").strip(), body.get("color"))
         return web.json_response(_public(db.account(aid)))
 
@@ -147,6 +151,10 @@ def build_app(db: DB, sync: SyncManager, ingress_only: bool = False) -> web.Appl
         fields = {k: body[k] for k in ("name", "color", "source", "client_id") if k in body}
         if "source" in fields and fields["source"] not in auth.SOURCES:
             return _bad("unknown source")
+        if "color" in fields and not COLOR_RE.match(str(fields["color"])):
+            return _bad("invalid colour")
+        if "name" in fields and not str(fields["name"]).strip():
+            return _bad("Name is missing")
         if "source" in fields or "client_id" in fields:
             fields.update(access_token=None, refresh_token=None, status="login_required")
         db.update_account(aid, **fields)
