@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- Runtime: Python 3.15 (base image `python:3.15-alpine`).
+- CI: updated GitHub Actions (checkout v7, setup-python v7); tests run on Python 3.15.
+
 ## 0.3.1
 
 - Add-on config: removed options that only repeated Home Assistant's defaults (add-on linter); English store description.

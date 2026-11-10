@@ -9,7 +9,7 @@ The repo is public: no personal names, locations (home/work coordinates), e-mail
 ## Layout
 
 - `repository.yaml` – HA add-on repository manifest
-- `ebike_rides/` – the add-on (`config.yaml`, `Dockerfile` from `python:3.13-alpine`, `run.sh`, `DOCS.md`, `translations/`)
+- `ebike_rides/` – the add-on (`config.yaml`, `Dockerfile` from `python:3.15-alpine`, `run.sh`, `DOCS.md`, `translations/`)
 - `ebike_rides/app/`
   - `bosch/auth.py` – PKCE login for two sources: `mobile` (public `one-bike-app` client, redirect `onebikeapp-ios://…`) and `dataact` (user's own `euda-…` client, redirect `http://localhost:8888/callback`). User pastes the redirect URL back.
   - `bosch/client.py` – `MobileClient` / `DataActClient`, both normalised to one model (`normalize_bike/activity/track`). Parsing is defensive (flat vs. `attributes`-wrapped, epoch vs. ISO).
