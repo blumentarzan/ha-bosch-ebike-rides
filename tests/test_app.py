@@ -1,3 +1,6 @@
+import json
+import logging
+import re
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -12,7 +15,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from app import attribution, geo, stats  # noqa: E402
 from app.bosch import auth  # noqa: E402
-from app.bosch.client import normalize_activity, normalize_track  # noqa: E402
+from app.bosch.client import check_activities, normalize_activity, normalize_track, redact  # noqa: E402
 from app.db import DB  # noqa: E402
 from app.ha import HABridge  # noqa: E402
 from app.main import build_app  # noqa: E402
@@ -56,6 +59,43 @@ def test_normalize_both_shapes_and_zero_values():
     assert act["avg_speed_kmh"] == 19.5
     assert normalize_track({"activityDetails": [{"latitude": 48.1, "longitude": 11.5},
                                                 {"latitude": 0, "longitude": 0}]}) == [[48.1, 11.5, None, None]]
+
+
+def test_redact_keeps_shape_drops_personal_data():
+    raw = {
+        "access_token": "abc", "data": [
+            {"id": "r1", "attributes": {"title": "Home to work", "distance": 12345,
+                                        "startTime": "2025-05-01T06:00:00Z",
+                                        "owner": "someone@example.com",
+                                        "startPoint": {"lat": 48.137412, "lon": 11.575512}}},
+            {"id": "r2"}, {"id": "r3"},
+        ],
+        "bike": {"name": "My bike", "brandName": "Brand", "frameNumber": "XYZ"},
+        "points": [{"latitude": 48.137412, "longitude": 11.575512, "altitude": 512.3}],
+    }
+    out = redact(raw)
+    first = out["data"][0]["attributes"]
+    assert out["access_token"] == "<redacted>"
+    assert first["title"] == "<redacted>" and first["owner"] == "<redacted>"
+    assert first["distance"] == 12345 and first["startTime"] == "2025-05-01T06:00:00Z"
+    assert first["startPoint"] == {"lat": 48.1, "lon": 11.6}
+    assert out["data"][2] == "... 1 more"
+    assert out["bike"] == {"name": "<redacted>", "brandName": "Brand", "frameNumber": "<redacted>"}
+    assert out["points"][0] == {"latitude": 48.1, "longitude": 11.6, "altitude": 512.3}
+
+
+def test_check_activities_flags_wrong_mapping():
+    good = [{"distance_m": 12_000, "duration_s": 2400, "elevation_gain_m": 50,
+             "avg_speed_kmh": 18, "start_odometer_m": 1000}] * 3
+    assert check_activities(3, good) == []
+    km = [dict(r, distance_m=12.0) for r in good]
+    assert any("looks like km" in p for p in check_activities(3, km))
+    ms = [dict(r, avg_speed_kmh=5.0) for r in good]
+    assert any("average speed" in p for p in check_activities(3, ms))
+    assert any("skipped" in p for p in check_activities(5, good))
+    assert any("none of 4" in p for p in check_activities(4, []))
+    no_elev = [dict(r, elevation_gain_m=None) for r in good]
+    assert check_activities(3, no_elev) == ["elevation gain missing in all 3 rides"]
 
 
 def test_attribution_by_odometer():
@@ -210,3 +250,36 @@ async def test_wrong_state_rejected(env):
     r = await client.post(f"/api/accounts/{aid}/login/finish",
                           json={"pasted": f"{auth.MOBILE_REDIRECT}?state=nope&code=code-1"})
     assert r.status == 400
+
+
+async def test_debug_log_samples_are_redacted(env, caplog):
+    db, mgr, client, fake = env
+    caplog.set_level(logging.DEBUG, logger="app.bosch.client")
+    await _login(client, mgr, "Alex", "mobile", "code-1")
+    await _login(client, mgr, "Sam", "dataact", "code-2", client_id="euda-test")
+    records = [r for r in caplog.records if r.name == "app.bosch.client"]
+    text = "\n".join(r.getMessage() for r in records)
+    for cls in ("MobileClient", "DataActClient"):
+        for endpoint in ("bikes", "activities", "track"):
+            assert f"{cls} {endpoint} raw:" in text
+        assert f"{cls} first ride parsed:" in text
+        assert f"{cls} track parsed:" in text
+    # fake data parses cleanly -> no mapping warnings
+    assert not [r for r in records if r.levelno >= logging.WARNING]
+    # one sample per endpoint per sync, not one per ride
+    assert text.count("MobileClient track raw:") == 1
+    # nothing that could locate anyone: no precise coordinates, no ride titles
+    assert not re.search(r"4[78]\.\d{2,}", text)
+    assert "Commute" not in text and "Evening loop" not in text
+
+
+async def test_unparseable_track_warns_once(env, caplog):
+    db, mgr, client, fake = env
+    caplog.set_level(logging.WARNING, logger="app.bosch.client")
+    fake_bosch.BROKEN_TRACKS = True
+    try:
+        await _login(client, mgr, "Alex", "mobile", "code-1")
+    finally:
+        fake_bosch.BROKEN_TRACKS = False
+    warnings = [r.getMessage() for r in caplog.records if "no GPS points" in r.getMessage()]
+    assert len(warnings) == 1 and "keys:" in warnings[0]

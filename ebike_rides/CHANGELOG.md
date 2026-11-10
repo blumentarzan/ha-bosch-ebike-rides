@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- Diagnostics for the first syncs against the real Bosch API: with `log_level: debug` the log shows one redacted raw answer per endpoint and what was parsed from it, ready to paste into an issue (see "Troubleshooting" in the documentation).
+- Warnings at normal log level when values look wrong: rides that could not be parsed, distance or duration missing, distance that looks like km, implausible speed, ride details without GPS points, bikes without an id.
+
 ## 0.3.2
 
 - Runtime: Python 3.15 (base image `python:3.15-alpine`).

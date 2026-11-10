@@ -48,7 +48,7 @@ Release: bump `version` in `ebike_rides/config.yaml` (and the Dockerfile label),
 
 ## Open points
 
-- **Not yet tested against the real Bosch API.** First real sync: check field names in `normalize_*` against real answers (log at debug level), especially Data Act distance units and the mobile bike-profile shape.
+- **Not yet tested against the real Bosch API.** First real sync: with `log_level: debug` the client logs one redacted raw answer per endpoint (`redact()`/`check_activities()` in `bosch/client.py`); check field names in `normalize_*` against them, especially Data Act distance units and the mobile bike-profile shape. When fixing a mapping, add the real (redacted) shape to `tests/fake_bosch.py`.
 - Data Act source: unclear whether Swiss accounts get data (EU only); mobile source is the default.
 - Mobile login needs the redirect URL from browser DevTools (Network → `oauth2redirect`); consider a smoother flow later.
 - Ideas: privacy zone around home (hide start/end), per-bike odometer chart, yearly goal per person, weather overlay.

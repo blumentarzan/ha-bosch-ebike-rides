@@ -10,3 +10,4 @@ configuration:
     description: Pro Person km-Sensoren und ein Event pro neuer Fahrt.
   log_level:
     name: Log-Level
+    description: '"debug" schreibt (anonymisierte) Rohantworten der Bosch-API ins Log, wenn Werte falsch aussehen.'

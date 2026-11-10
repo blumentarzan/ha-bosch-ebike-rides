@@ -57,7 +57,20 @@ The sensors are set after every sync, and again at the next sync after an HA res
 | `sync_interval_minutes` | 30 | Time between two syncs |
 | `detail_delay_seconds` | 0.5 | Pause between two track downloads (spares the Bosch API) |
 | `publish_sensors` | true | Sensors & event in HA |
-| `log_level` | info | |
+| `log_level` | info | `debug` logs what Bosch returns, see below |
+
+## Troubleshooting: wrong or missing values
+
+If a ride shows 0 km, no elevation, a wrong time or sits on the wrong bike, the Bosch API probably answers with field names or units this add-on does not know yet.
+
+1. Set `log_level` to `debug` and restart the add-on.
+2. Start a sync (Accounts tab).
+3. Open the add-on **Log**. For each account it shows one raw answer per endpoint (`bikes raw`, `activities raw`, `track raw`) and what was parsed from it (`first ride parsed`, `track parsed`).
+4. Open an issue on GitHub with those lines and what looks wrong.
+
+These lines are made safe to share: tokens, e-mail addresses, bike names, ride titles and serial numbers are replaced by `<redacted>`, positions are rounded to about 10 km and lists are cut to their first two entries. Have a quick look before posting anyway.
+
+Even at `info` level the add-on warns when values look wrong, e.g. rides without a distance, a distance that looks like km instead of m, or ride details without GPS points. Set `log_level` back to `info` afterwards.
 
 ## Map tiles
 
