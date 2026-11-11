@@ -22,6 +22,7 @@ The repo is public: no personal names, locations (home/work coordinates), e-mail
   - `main.py` – aiohttp app on :8099; Ingress-only guard when `SUPERVISOR_TOKEN` is set
   - `ha.py` – sensors `sensor.ebike_<name>_km_this_year` / `_km_this_month` / `_km_this_week` / `_rides_this_year` / `_days_since_last_ride` / `_last_ride`, `_<bike>_battery` (only when Bosch reports `batteryLevel`), event `ebike_rides_new_activity`
   - `static/` – vanilla JS UI (Leaflet, Chart.js vendored), custom canvas heat layer
+- `docs/screenshots/` – README screenshots of `scripts/preview.py` demo data (retake after visible UI changes)
 - `tests/fake_bosch.py` – fake Bosch cloud (token endpoint, mobile + Data Act APIs, generated rides)
 - `scripts/upstream_watch.py` + `.github/upstream.json` – daily check of upstream projects
 
